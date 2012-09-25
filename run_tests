@@ -39,17 +39,45 @@ function usage()
   for method level filtering.
 
   OPTIONS:
-     -n      Run test methods that match this string
-     -f      Specify which test files to include (paths or regexs)
+     -n arg  Run test methods that match this string
+     -f arg  Specify which test files to include (paths or regexs)
+     -i      Run integration tests
+     -t      Run functional tests
+     -u      Run unit tests
      -m      Migrate the test database by running "rake db:test:prepare"
      -h, -?  Show this message
      -c      Start memcached before the run and stop it after
+EOF
+
+  # need to think about when, how to source plugin files
+  usage_file="$(plugin_directory)/usage"
+
+  if [ -e $usage_file ]
+  then
+    source $usage_file
+    echo "  PLUGIN OPTIONS:"
+  fi
+
+  cat << EOF
 
   EXAMPLES:
      $0 -f job -n scheduling
      $0 -f test/unit/job_test.rb -f job_review_ -f '/(subm|worker)/'
 EOF
   exit 1
+}
+
+function plugin_directory {
+  SOURCE="${BASH_SOURCE[0]}"
+  PLUGIN_DIR="$( dirname "$SOURCE" )"
+  while [ -h "$SOURCE" ]
+  do 
+    SOURCE="$(readlink "$SOURCE")"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+    PLUGIN_DIR="$( cd -P "$( dirname "$SOURCE"  )" && pwd )"
+  done
+  PLUGIN_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+  echo $PLUGIN_DIR
 }
 
 function set_env_vars {
@@ -106,10 +134,30 @@ function collect_tests {
       tests="$tests $test"
     fi
   done
+
+  if [[ $run_all_units == 1 ]]
+  then
+    find_tests_under_dir_by_regex '/_test/' 'unit/**'
+    tests="$tests $files"
+  fi
+  if [[ $run_all_functionals == 1 ]]
+  then
+    find_tests_under_dir_by_regex '/_test/' 'functional/**'
+    tests="$tests $files"
+  fi
+  if [[ $run_all_integrations == 1 ]]
+  then
+    find_tests_under_dir_by_regex '/_test/' 'integration/**'
+    tests="$tests $files"
+  fi
 }
 
 function find_tests_by_regex {
-  files=`ruby -e "puts Dir['./test/**/*.rb'].select{|e| File.basename(e) =~ $1}.map{|e| e.sub('./', '')}.join(' ')"`
+  find_tests_under_dir_by_regex $1 '**'
+}
+
+function find_tests_under_dir_by_regex {
+  files=`ruby -e "puts Dir['./test/$2/*.rb'].select{|e| File.basename(e) =~ $1}.map{|e| e.sub('./', '')}.join(' ')"`
 }
 
 function run_matching_test_methods {
@@ -118,9 +166,12 @@ function run_matching_test_methods {
 }
 
 run_single=0
+run_all_integrations=0
+run_all_functionals=0
+run_all_units=0
 tests=""
 
-while getopts “h:n:f:c:?:m” OPTION
+while getopts “n:f:c?hmiut” OPTION
 do
      case $OPTION in
          h)
@@ -137,14 +188,26 @@ do
              rake db:test:prepare
              echo; echo
              ;;
-	 c)
-	     run_memcache = 1
+         c)
+             run_memcache=1
              ;;
-	 ?)
-	     usage
-	     exit 1
-	     ;;
-	 esac
+         i)
+             run_all_integrations=1
+             collect_tests
+             ;;
+         u)
+             run_all_units=1
+             collect_tests
+             ;;
+         t)
+             run_all_functionals=1
+             collect_tests
+             ;;
+         ?)
+             usage
+             exit 1
+             ;;
+     esac
 done
 
 if [[ "$tests" == "" ]]
