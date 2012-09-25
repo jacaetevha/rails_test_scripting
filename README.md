@@ -6,7 +6,7 @@ Bash script for running various tests in a Rails environment
 How to use it:
 ==============
 
-This method of running tests in a Rails environment does not prepare the database first. As a benefit, the entire test run is much faster; the obvious drawback is that the test database could be out-of-sync.
+This method of running tests in a Rails environment does not prepare the database first. As a benefit, the entire test run is a little faster; the obvious drawback is that the test database could be out-of-sync.
 
 In order to get your test database in sync, you can pass the -m flag.
 
